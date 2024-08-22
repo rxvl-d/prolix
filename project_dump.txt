@@ -1,0 +1,879 @@
+File: ./config.py
+----------------------
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+class Config:
+    SECRET_KEY = os.environ.get('SECRET_KEY') or 'you-will-never-guess'
+    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or 'sqlite:///annotations.db'
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
+    ONBOARDING_QUESTIONS = 5
+    ASSESSMENT_QUESTIONS = 5
+    LIVE_QUESTIONS = 10
+    PASS_THRESHOLD = 0.8  # 80% correct answers to pass assessment
+    PROLIFIC_COMPLETION_URL = os.environ.get('PROLIFIC_COMPLETION_URL') or 'https://app.prolific.co/submissions/complete?cc='
+    PROLIFIC_SCREEN_OUT_URL = os.environ.get('PROLIFIC_SCREEN_OUT_URL') or 'https://app.prolific.co/submissions/complete?cc='
+
+File: ./project_dump.py
+----------------------
+import os
+
+def dump_files(directory='.', output_file='project_dump.txt'):
+    extensions = ('.py', '.js', '.json', '.txt')
+    
+    with open(output_file, 'w', encoding='utf-8') as outfile:
+        for root, dirs, files in os.walk(directory):
+            if 'migrations' in dirs:
+                dirs.remove('migrations')  # don't visit migrations directories
+            
+            for file in files:
+                if file.endswith(extensions):
+                    file_path = os.path.join(root, file)
+                    outfile.write(f"File: {file_path}\n")
+                    outfile.write("----------------------\n")
+                    
+                    try:
+                        with open(file_path, 'r', encoding='utf-8') as infile:
+                            outfile.write(infile.read())
+                    except Exception as e:
+                        outfile.write(f"Error reading file: {str(e)}\n")
+                    
+                    outfile.write("\n\n")
+
+    print(f"File dump completed. Output written to {output_file}")
+
+if __name__ == "__main__":
+    dump_files()
+
+File: ./models.py
+----------------------
+from flask_sqlalchemy import SQLAlchemy
+
+db = SQLAlchemy()
+
+class Participant(db.Model):
+    id = db.Column(db.String(50), primary_key=True)
+    study_id = db.Column(db.String(50), nullable=False)
+    session_id = db.Column(db.String(50), nullable=False)
+    completion_code = db.Column(db.String(20), nullable=True)
+    current_stage = db.Column(db.String(20), default='welcome')
+    score = db.Column(db.Float, nullable=True)
+
+class Annotation(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    participant_id = db.Column(db.String(50), db.ForeignKey('participant.id'), nullable=False)
+    content_type = db.Column(db.String(20), nullable=False)  # 'website' or 'snippet'
+    content = db.Column(db.Text, nullable=False)
+    answers = db.Column(db.JSON, nullable=False)
+    stage = db.Column(db.String(20), nullable=False)  # 'onboarding', 'assessment', or 'live'
+
+class Content(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    type = db.Column(db.String(20), nullable=False)  # 'website' or 'snippet'
+    content = db.Column(db.Text, nullable=False)
+    stage = db.Column(db.String(20), nullable=False)  # 'onboarding', 'assessment', or 'live'
+    correct_answers = db.Column(db.JSON, nullable=True)
+    explanations = db.Column(db.JSON, nullable=True)
+
+
+File: ./requirements.txt
+----------------------
+Flask==2.3.2
+Flask-SQLAlchemy==3.0.3
+Flask-Cors==3.0.10
+Flask-Migrate==4.0.4
+python-dotenv==1.0.0
+gunicorn==20.1.0
+pytest==7.3.1
+
+
+File: ./package.json
+----------------------
+{
+    "name": "annotation-app-frontend",
+    "version": "0.1.0",
+    "private": true,
+    "dependencies": {
+      "@testing-library/jest-dom": "^5.16.5",
+      "@testing-library/react": "^13.4.0",
+      "@testing-library/user-event": "^13.5.0",
+      "axios": "^0.27.2",
+      "bootstrap": "^5.2.3",
+      "react": "^18.2.0",
+      "react-bootstrap": "^2.7.4",
+      "react-dom": "^18.2.0",
+      "react-router-dom": "^6.11.2",
+      "react-scripts": "5.0.1",
+      "web-vitals": "^2.1.4"
+    },
+    "scripts": {
+      "start": "react-scripts start",
+      "build": "react-scripts build",
+      "test": "react-scripts test",
+      "eject": "react-scripts eject"
+    },
+    "eslintConfig": {
+      "extends": [
+        "react-app",
+        "react-app/jest"
+      ]
+    },
+    "browserslist": {
+      "production": [
+        ">0.2%",
+        "not dead",
+        "not op_mini all"
+      ],
+      "development": [
+        "last 1 chrome version",
+        "last 1 firefox version",
+        "last 1 safari version"
+      ]
+    }
+  }
+
+File: ./project_dump.txt
+----------------------
+
+
+File: ./app.py
+----------------------
+import json
+from flask import Flask, request, jsonify, redirect
+from flask_sqlalchemy import SQLAlchemy
+from flask_cors import CORS
+from flask_migrate import Migrate
+import os
+from dotenv import load_dotenv
+import random
+import string
+
+# Load environment variables
+load_dotenv()
+
+app = Flask(__name__)
+CORS(app)
+
+# Configure the SQLite database
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///annotations.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+db = SQLAlchemy(app)
+migrate = Migrate(app, db)
+
+# Define models
+class Participant(db.Model):
+    id = db.Column(db.String(50), primary_key=True)
+    study_id = db.Column(db.String(50), nullable=False)
+    session_id = db.Column(db.String(50), nullable=False)
+    completion_code = db.Column(db.String(20), nullable=True)
+    current_stage = db.Column(db.String(20), default='welcome')
+    assessment_score = db.Column(db.Float, nullable=True)
+
+class Task(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    content_type = db.Column(db.String(20), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    stage = db.Column(db.String(20), nullable=False)
+    questions = db.Column(db.JSON, nullable=False)
+    correct_answers = db.Column(db.JSON, nullable=True)
+    explanations = db.Column(db.JSON, nullable=True)
+
+class Annotation(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    participant_id = db.Column(db.String(50), db.ForeignKey('participant.id'), nullable=False)
+    task_id = db.Column(db.Integer, db.ForeignKey('task.id'), nullable=False)
+    answers = db.Column(db.JSON, nullable=False)
+
+@app.route('/api/initialize', methods=['POST'])
+def initialize_participant():
+    data = request.json
+    participant = Participant(
+        id=data['pid'],
+        study_id=data['studyId'],
+        session_id=data['sessionId']
+    )
+    db.session.add(participant)
+    db.session.commit()
+    return jsonify({"currentStage": participant.current_stage})
+
+@app.route('/api/onboarding')
+def get_onboarding_tasks():
+    participant_id = request.args.get('participantId')
+    tasks = Task.query.filter_by(stage='onboarding').all()
+    return jsonify([{
+        'id': task.id,
+        'contentType': task.content_type,
+        'content': task.content,
+        'questions': task.questions,
+        'correctAnswers': task.correct_answers,
+        'explanations': task.explanations
+    } for task in tasks])
+
+@app.route('/api/assessment')
+def get_assessment_tasks():
+    participant_id = request.args.get('participantId')
+    tasks = Task.query.filter_by(stage='assessment').all()
+    return jsonify([{
+        'id': task.id,
+        'contentType': task.content_type,
+        'content': task.content,
+        'questions': task.questions
+    } for task in tasks])
+
+@app.route('/api/live-annotation')
+def get_live_tasks():
+    participant_id = request.args.get('participantId')
+    tasks = Task.query.filter_by(stage='live').all()
+    return jsonify([{
+        'id': task.id,
+        'contentType': task.content_type,
+        'content': task.content,
+        'questions': task.questions
+    } for task in tasks])
+
+@app.route('/api/submit-annotation', methods=['POST'])
+def submit_annotation():
+    data = request.json
+    annotation = Annotation(
+        participant_id=data['participantId'],
+        task_id=data['itemId'],
+        answers=data['answers']
+    )
+    db.session.add(annotation)
+    db.session.commit()
+    return jsonify({"message": "Annotation submitted successfully"})
+
+
+@app.route('/api/submit-assessment', methods=['POST'])
+def submit_assessment():
+    data = request.json
+    participant = Participant.query.get(data['participantId'])
+    
+    # Fetch all assessment tasks
+    assessment_tasks = Task.query.filter_by(stage='assessment').all()
+    
+    total_questions = 0
+    correct_answers = 0
+
+    for task in assessment_tasks:
+        task_answers = data['answers'].get(str(task.id), {})
+        correct_task_answers = json.loads(task.correct_answers)
+        
+        for question_id, correct_answer in correct_task_answers.items():
+            total_questions += 1
+            user_answer = task_answers.get(question_id)
+            
+            if isinstance(correct_answer, list):  # For multiple choice questions
+                if set(correct_answer) == set(user_answer):
+                    correct_answers += 1
+            elif isinstance(correct_answer, int):  # For Likert scale questions
+                if correct_answer == user_answer:
+                    correct_answers += 1
+            elif correct_answer.lower() == user_answer.lower():  # For text and yes/no/unclear questions
+                correct_answers += 1
+
+    score = correct_answers / total_questions if total_questions > 0 else 0
+    
+    participant.assessment_score = score
+    participant.current_stage = 'live' if score >= app.config['PASS_THRESHOLD'] else 'screened_out'
+    
+    # Save the participant's answers
+    for task_id, answers in data['answers'].items():
+        annotation = Annotation(
+            participant_id=participant.id,
+            task_id=int(task_id),
+            answers=json.dumps(answers)
+        )
+        db.session.add(annotation)
+
+    db.session.commit()
+    
+    return jsonify({
+        "score": score,
+        "passed": score >= app.config['PASS_THRESHOLD']
+    })
+
+@app.route('/api/completion-code')
+def get_completion_code():
+    participant_id = request.args.get('participantId')
+    participant = Participant.query.get(participant_id)
+    if not participant.completion_code:
+        participant.completion_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+        db.session.commit()
+    
+    if participant.current_stage == 'screened_out':
+        completion_url = app.config['PROLIFIC_SCREEN_OUT_URL']
+    else:
+        completion_url = app.config['PROLIFIC_COMPLETION_URL']
+    
+    return jsonify({
+        "completionCode": participant.completion_code,
+        "completionUrl": completion_url + participant.completion_code
+    })
+
+if __name__ == '__main__':
+    app.run(debug=True)
+
+File: ./manage.py
+----------------------
+from flask_migrate import Migrate, MigrateCommand
+from flask_script import Manager
+from app import app, db
+
+migrate = Migrate(app, db)
+manager = Manager(app)
+
+manager.add_command('db', MigrateCommand)
+
+if __name__ == '__main__':
+    manager.run()
+
+File: ./app.js
+----------------------
+import React, { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
+import axios from 'axios';
+import WelcomePage from './components/WelcomePage';
+import OnboardingPage from './components/OnboardingPage';
+import AssessmentPage from './components/AssessmentPage';
+import LiveAnnotationPage from './components/LiveAnnotationPage';
+import ThankYouPage from './components/ThankYouPage';
+
+function App() {
+  const [participantId, setParticipantId] = useState(null);
+  const [currentStage, setCurrentStage] = useState('welcome');
+
+  useEffect(() => {
+    // Extract Prolific parameters from URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const pid = urlParams.get('PROLIFIC_PID');
+    const studyId = urlParams.get('STUDY_ID');
+    const sessionId = urlParams.get('SESSION_ID');
+
+    if (pid && studyId && sessionId) {
+      setParticipantId(pid);
+      // Initialize participant in backend
+      axios.post('/api/initialize', { pid, studyId, sessionId })
+        .then(response => {
+          setCurrentStage(response.data.currentStage);
+        })
+        .catch(error => console.error('Error initializing participant:', error));
+    }
+  }, []);
+
+  const handleStageComplete = (nextStage) => {
+    setCurrentStage(nextStage);
+  };
+
+  return (
+    <Router>
+      <div className="App">
+        <Routes>
+          <Route 
+            path="/" 
+            element={
+              currentStage === 'welcome' ? 
+                <WelcomePage onComplete={() => handleStageComplete('onboarding')} /> : 
+                <Navigate to={`/${currentStage}`} replace />
+            } 
+          />
+          <Route 
+            path="/onboarding" 
+            element={
+              currentStage === 'onboarding' ? 
+                <OnboardingPage 
+                  participantId={participantId} 
+                  onComplete={() => handleStageComplete('assessment')} 
+                /> : 
+                <Navigate to={`/${currentStage}`} replace />
+            } 
+          />
+          <Route 
+            path="/assessment" 
+            element={
+              currentStage === 'assessment' ? 
+                <AssessmentPage 
+                  participantId={participantId} 
+                  onComplete={() => handleStageComplete('live')} 
+                /> : 
+                <Navigate to={`/${currentStage}`} replace />
+            } 
+          />
+          <Route 
+            path="/live" 
+            element={
+              currentStage === 'live' ? 
+                <LiveAnnotationPage 
+                  participantId={participantId} 
+                  onComplete={() => handleStageComplete('thank-you')} 
+                /> : 
+                <Navigate to={`/${currentStage}`} replace />
+            } 
+          />
+          <Route 
+            path="/thank-you" 
+            element={
+              currentStage === 'thank-you' ? 
+                <ThankYouPage participantId={participantId} /> : 
+                <Navigate to={`/${currentStage}`} replace />
+            } 
+          />
+        </Routes>
+      </div>
+    </Router>
+  );
+}
+
+export default App;
+
+File: ./seed_database.py
+----------------------
+from app import app, db, Task
+import json
+
+def seed_database():
+    with app.app_context():
+        # Clear existing tasks
+        Task.query.delete()
+
+        # Onboarding tasks
+        onboarding_tasks = [
+            {
+                'content_type': 'website',
+                'content': 'This is a sample website content for onboarding.',
+                'stage': 'onboarding',
+                'questions': json.dumps([
+                    {'id': 'q1', 'type': 'likert', 'text': 'How relevant is this content?'},
+                    {'id': 'q2', 'type': 'text', 'text': 'Explain your reasoning for the previous answer.'},
+                    {'id': 'q3', 'type': 'yesNoUnclear', 'text': 'Is this content factual?'},
+                    {'id': 'q4', 'type': 'multipleChoice', 'text': 'Which of the following topics are covered? (Select all that apply)', 'options': ['Technology', 'Science', 'Politics', 'Entertainment']}
+                ]),
+                'correct_answers': json.dumps({
+                    'q1': 4,
+                    'q2': 'The content is highly relevant because it covers multiple topics.',
+                    'q3': 'Yes',
+                    'q4': ['Technology', 'Science']
+                }),
+                'explanations': json.dumps({
+                    'q1': 'The content covers multiple topics, making it highly relevant.',
+                    'q2': 'A good explanation should reference specific aspects of the content.',
+                    'q3': 'The content presents factual information about technology and science.',
+                    'q4': 'The content primarily focuses on technology and science topics.'
+                })
+            },
+            # Add more onboarding tasks here
+        ]
+
+        # Assessment tasks
+        assessment_tasks = [
+            {
+                'content_type': 'snippet',
+                'content': 'This is a sample search snippet for assessment.',
+                'stage': 'assessment',
+                'questions': json.dumps([
+                    {'id': 'q1', 'type': 'likert', 'text': 'How relevant is this snippet?'},
+                    {'id': 'q2', 'type': 'text', 'text': 'Summarize the main point of this snippet.'},
+                    {'id': 'q3', 'type': 'yesNoUnclear', 'text': 'Does this snippet contain opinion?'},
+                    {'id': 'q4', 'type': 'multipleChoice', 'text': 'What type of content is this? (Select all that apply)', 'options': ['News', 'Opinion', 'Research', 'Advertisement']}
+                ]),
+                'correct_answers': json.dumps({
+                    'q1': 3,
+                    'q2': 'The snippet provides a brief overview of a topic.',
+                    'q3': 'No',
+                    'q4': ['News']
+                })
+            },
+            # Add more assessment tasks here
+        ]
+
+        # Live annotation tasks
+        live_tasks = [
+            {
+                'content_type': 'website',
+                'content': 'This is a sample website content for live annotation.',
+                'stage': 'live',
+                'questions': json.dumps([
+                    {'id': 'q1', 'type': 'likert', 'text': 'How relevant is this content?'},
+                    {'id': 'q2', 'type': 'text', 'text': 'Explain your reasoning for the previous answer.'},
+                    {'id': 'q3', 'type': 'yesNoUnclear', 'text': 'Is this content factual?'},
+                    {'id': 'q4', 'type': 'multipleChoice', 'text': 'Which of the following topics are covered? (Select all that apply)', 'options': ['Technology', 'Science', 'Politics', 'Entertainment']}
+                ])
+            },
+            # Add more live annotation tasks here
+        ]
+
+        # Add all tasks to the database
+        for task in onboarding_tasks + assessment_tasks + live_tasks:
+            db.session.add(Task(**task))
+
+        db.session.commit()
+        print("Database seeded successfully!")
+
+if __name__ == '__main__':
+    seed_database()
+
+File: ./components/AssessmentPage.js
+----------------------
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import { Alert, Button } from 'react-bootstrap';
+import AnnotationLayout from './AnnotationLayout';
+
+function AssessmentPage({ participantId, onComplete }) {
+  const [currentItem, setCurrentItem] = useState(0);
+  const [items, setItems] = useState([]);
+  const [answers, setAnswers] = useState({});
+  const [submitted, setSubmitted] = useState(false);
+  const [assessmentResult, setAssessmentResult] = useState(null);
+
+  useEffect(() => {
+    // Fetch assessment items from the backend
+    axios.get(`/api/assessment?participantId=${participantId}`)
+      .then(response => setItems(response.data))
+      .catch(error => console.error('Error fetching assessment items:', error));
+  }, [participantId]);
+
+  const handleAnswerChange = (questionId, answer) => {
+    setAnswers(prev => ({ ...prev, [questionId]: answer }));
+  };
+
+  const handleSubmit = () => {
+    if (currentItem < items.length - 1) {
+      setCurrentItem(prev => prev + 1);
+      setAnswers({});
+    } else {
+      axios.post('/api/submit-assessment', { participantId, answers })
+        .then(response => {
+          setAssessmentResult(response.data);
+          setSubmitted(true);
+        })
+        .catch(error => console.error('Error submitting assessment:', error));
+    }
+  };
+
+  useEffect(() => {
+    if (submitted && assessmentResult) {
+      if (assessmentResult.passed) {
+        onComplete();
+      } else {
+        // Redirect to Prolific screen-out URL
+        axios.get(`/api/completion-code?participantId=${participantId}`)
+          .then(response => {
+            window.location.href = response.data.completionUrl;
+          })
+          .catch(error => console.error('Error getting completion code:', error));
+      }
+    }
+  }, [submitted, assessmentResult, participantId, onComplete]);
+
+  if (items.length === 0) return <div>Loading...</div>;
+
+  if (submitted) {
+    return (
+      <Alert variant={assessmentResult.passed ? 'success' : 'danger'}>
+        <h4>Assessment Complete</h4>
+        <p>Your score: {(assessmentResult.score * 100).toFixed(2)}%</p>
+        {assessmentResult.passed ? (
+          <p>Congratulations! You've passed the assessment. You will now be redirected to the live annotation tasks.</p>
+        ) : (
+          <p>Thank you for your participation. Unfortunately, you didn't pass the assessment. You will be redirected to Prolific shortly.</p>
+        )}
+      </Alert>
+    );
+  }
+
+  const item = items[currentItem];
+
+  return (
+    <AnnotationLayout
+      title={`Assessment: Item ${currentItem + 1} of ${items.length}`}
+      item={item}
+      questions={item.questions}
+      answers={answers}
+      onAnswerChange={handleAnswerChange}
+      onSubmit={handleSubmit}
+      submitButtonText={currentItem < items.length - 1 ? 'Next Item' : 'Submit Assessment'}
+    />
+  );
+}
+
+export default AssessmentPage;
+
+File: ./components/LiveAnnotationPage.js
+----------------------
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import { ProgressBar } from 'react-bootstrap';
+import AnnotationLayout from './AnnotationLayout';
+
+function LiveAnnotationPage({ participantId, onComplete }) {
+  const [currentItem, setCurrentItem] = useState(0);
+  const [items, setItems] = useState([]);
+  const [answers, setAnswers] = useState({});
+  const [progress, setProgress] = useState(0);
+
+  useEffect(() => {
+    // Fetch live annotation items from the backend
+    axios.get(`/api/live-annotation?participantId=${participantId}`)
+      .then(response => setItems(response.data))
+      .catch(error => console.error('Error fetching live annotation items:', error));
+  }, [participantId]);
+
+  const handleAnswerChange = (questionId, answer) => {
+    setAnswers(prev => ({ ...prev, [questionId]: answer }));
+  };
+
+  const handleSubmit = () => {
+    axios.post('/api/submit-annotation', { participantId, itemId: items[currentItem].id, answers })
+      .then(() => {
+        if (currentItem < items.length - 1) {
+          setCurrentItem(prev => prev + 1);
+          setAnswers({});
+          setProgress((currentItem + 1) / items.length * 100);
+        } else {
+          onComplete();
+        }
+      })
+      .catch(error => console.error('Error submitting annotation:', error));
+  };
+
+  if (items.length === 0) return <div>Loading...</div>;
+
+  const item = items[currentItem];
+
+  return (
+    <>
+      <ProgressBar now={progress} label={`${progress.toFixed(0)}%`} className="mb-4" />
+      <AnnotationLayout
+        title={`Live Annotation: Item ${currentItem + 1} of ${items.length}`}
+        item={item}
+        questions={item.questions}
+        answers={answers}
+        onAnswerChange={handleAnswerChange}
+        onSubmit={handleSubmit}
+        submitButtonText={currentItem < items.length - 1 ? 'Submit and Next' : 'Submit and Finish'}
+      />
+    </>
+  );
+}
+
+export default LiveAnnotationPage;
+
+File: ./components/WelcomePage.js
+----------------------
+
+
+File: ./components/ThankYouPage.js
+----------------------
+
+
+File: ./components/AnnotationLayout.js
+----------------------
+import React from 'react';
+import { Container, Row, Col, Form, Button } from 'react-bootstrap';
+
+const QuestionTypes = {
+  LIKERT: 'likert',
+  TEXT: 'text',
+  YES_NO_UNCLEAR: 'yesNoUnclear',
+  MULTIPLE_CHOICE: 'multipleChoice'
+};
+
+function LikertScale({ question, value, onChange }) {
+  return (
+    <Form.Group>
+      <Form.Label>{question.text}</Form.Label>
+      <div className="d-flex justify-content-between">
+        {[1, 2, 3, 4, 5].map((num) => (
+          <Form.Check
+            key={num}
+            type="radio"
+            id={`${question.id}-${num}`}
+            label={num}
+            checked={value === num}
+            onChange={() => onChange(question.id, num)}
+          />
+        ))}
+      </div>
+    </Form.Group>
+  );
+}
+
+function YesNoUnclear({ question, value, onChange }) {
+  return (
+    <Form.Group>
+      <Form.Label>{question.text}</Form.Label>
+      {['Yes', 'No', 'Unclear'].map((option) => (
+        <Form.Check
+          key={option}
+          type="radio"
+          id={`${question.id}-${option}`}
+          label={option}
+          checked={value === option}
+          onChange={() => onChange(question.id, option)}
+        />
+      ))}
+    </Form.Group>
+  );
+}
+
+function MultipleChoice({ question, value, onChange }) {
+  return (
+    <Form.Group>
+      <Form.Label>{question.text}</Form.Label>
+      {question.options.map((option) => (
+        <Form.Check
+          key={option}
+          type="checkbox"
+          id={`${question.id}-${option}`}
+          label={option}
+          checked={value && value.includes(option)}
+          onChange={(e) => {
+            const newValue = e.target.checked
+              ? [...(value || []), option]
+              : (value || []).filter(v => v !== option);
+            onChange(question.id, newValue);
+          }}
+        />
+      ))}
+    </Form.Group>
+  );
+}
+
+function AnnotationLayout({ 
+  title, 
+  item, 
+  questions, 
+  answers, 
+  onAnswerChange, 
+  onSubmit, 
+  submitButtonText,
+  explanations 
+}) {
+  const renderQuestion = (question) => {
+    switch (question.type) {
+      case QuestionTypes.LIKERT:
+        return <LikertScale 
+          key={question.id} 
+          question={question} 
+          value={answers[question.id]} 
+          onChange={onAnswerChange} 
+        />;
+      case QuestionTypes.TEXT:
+        return (
+          <Form.Group key={question.id}>
+            <Form.Label>{question.text}</Form.Label>
+            <Form.Control 
+              as="textarea" 
+              rows={3} 
+              value={answers[question.id] || ''} 
+              onChange={(e) => onAnswerChange(question.id, e.target.value)} 
+            />
+          </Form.Group>
+        );
+      case QuestionTypes.YES_NO_UNCLEAR:
+        return <YesNoUnclear 
+          key={question.id} 
+          question={question} 
+          value={answers[question.id]} 
+          onChange={onAnswerChange} 
+        />;
+      case QuestionTypes.MULTIPLE_CHOICE:
+        return <MultipleChoice 
+          key={question.id} 
+          question={question} 
+          value={answers[question.id]} 
+          onChange={onAnswerChange} 
+        />;
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <Container className="mt-5">
+      <h2>{title}</h2>
+      <Row>
+        <Col md={explanations ? 6 : 12}>
+          <h3>{item.contentType === 'website' ? 'Website' : 'Search Snippet'}</h3>
+          <div className="border p-3 mb-3">
+            {item.content}
+          </div>
+          <Form>
+            {questions.map(renderQuestion)}
+            <Button onClick={onSubmit}>{submitButtonText}</Button>
+          </Form>
+        </Col>
+        {explanations && (
+          <Col md={6}>
+            <h3>Explanations</h3>
+            {questions.map(question => (
+              <div key={question.id} className="mb-3">
+                <h4>{question.text}</h4>
+                <p><strong>Correct Answer:</strong> {question.correctAnswer}</p>
+                <p><strong>Explanation:</strong> {question.explanation}</p>
+              </div>
+            ))}
+          </Col>
+        )}
+      </Row>
+    </Container>
+  );
+}
+
+export default AnnotationLayout;
+
+File: ./components/OnboardingPage.js
+----------------------
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import AnnotationLayout from './AnnotationLayout';
+
+function OnboardingPage({ participantId, onComplete }) {
+  const [currentExample, setCurrentExample] = useState(0);
+  const [examples, setExamples] = useState([]);
+  const [answers, setAnswers] = useState({});
+
+  useEffect(() => {
+    // Fetch onboarding examples from the backend
+    axios.get(`/api/onboarding?participantId=${participantId}`)
+      .then(response => setExamples(response.data))
+      .catch(error => console.error('Error fetching onboarding examples:', error));
+  }, [participantId]);
+
+  const handleAnswerChange = (questionId, answer) => {
+    setAnswers(prev => ({ ...prev, [questionId]: answer }));
+  };
+
+  const handleNext = () => {
+    if (currentExample < examples.length - 1) {
+      setCurrentExample(prev => prev + 1);
+      setAnswers({});
+    } else {
+      onComplete();
+    }
+  };
+
+  if (examples.length === 0) return <div>Loading...</div>;
+
+  const example = examples[currentExample];
+
+  return (
+    <AnnotationLayout
+      title={`Onboarding: Example ${currentExample + 1} of ${examples.length}`}
+      item={example}
+      questions={example.questions}
+      answers={answers}
+      onAnswerChange={handleAnswerChange}
+      onSubmit={handleNext}
+      submitButtonText={currentExample < examples.length - 1 ? 'Next Example' : 'Start Assessment'}
+      explanations={true}
+    />
+  );
+}
+
+export default OnboardingPage;
+
