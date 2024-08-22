@@ -9,15 +9,16 @@ function WelcomePage({ onComplete }) {
           <h1 className="text-center mb-4">Welcome to the Annotation Study</h1>
           <p>
             Thank you for participating in our study. You will be asked to annotate 
-            websites and search snippets by answering a series of questions about them.
+            websites of learning resources by answering a series of questions about them.
           </p>
           <p>
             The study consists of three stages:
           </p>
           <ol>
-            <li>Onboarding: You'll be shown 5 examples with explanations.</li>
-            <li>Assessment: You'll annotate 5 items to ensure you understand the task.</li>
-            <li>Live Annotation: You'll annotate a series of items for our study.</li>
+            <li>Onboarding: You'll be shown 5 examples with explanations of the expected answers.</li>
+            <li>Assessment: You'll annotate 5 items to ensure you understand the task. If you score too low, you will not be able to proceed. 
+              <b>NOTE:</b> You will still be paid for the expected 10 minutes of work it would take to complete the assessment.</li>
+            <li>Live Annotation: You'll annotate new examples without explanations.</li>
           </ol>
           <p>
             Please click the button below when you're ready to begin the onboarding process.

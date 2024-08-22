@@ -1,5 +1,5 @@
 import React from 'react';
-import { Container, Row, Col, Form, Button } from 'react-bootstrap';
+import { Alert, Container, Row, Col, Form, Button, ListGroup } from 'react-bootstrap';
 
 const QuestionTypes = {
   LIKERT: 'likert',
@@ -69,6 +69,28 @@ function MultipleChoice({ question, value, onChange }) {
   );
 }
 
+const ContentDisplay = ({ contentType, content }) => {
+  if (contentType === 'website') {
+    return (
+      <div>
+        <a href={content} target="_blank" rel="noopener noreferrer">
+          Link to learning resource
+        </a>
+      </div>
+    );
+  } else if (contentType === 'snippet') {
+    return (
+      <Alert variant="info">
+        <Alert.Heading>Search Snippet</Alert.Heading>
+        <p>{content}</p>
+      </Alert>
+    );
+  } else {
+    return <p>Unknown content type</p>;
+  }
+};
+
+
 function AnnotationLayout({ 
   title, 
   item, 
@@ -77,7 +99,8 @@ function AnnotationLayout({
   onAnswerChange, 
   onSubmit, 
   submitButtonText,
-  explanations 
+  explanations ,
+  correctAnswers
 }) {
   const renderQuestion = (question) => {
     switch (question.type) {
@@ -119,32 +142,37 @@ function AnnotationLayout({
     }
   };
 
+  const addExplanation = (questionItem) => {
+    if (explanations && correctAnswers) {
+      return <Row>
+        <Col md={6}>{questionItem}</Col>
+        <Col md={6} border>
+          <p><strong>Correct Answer:</strong> {correctAnswers[questionItem.key]}</p>
+          <p><strong>Explanation:</strong> {explanations[questionItem.key]}</p>
+        </Col>
+      </Row>
+    }
+    else {
+      return {questionItem}
+    }
+  }
+
+
   return (
     <Container className="mt-5">
       <h2>{title}</h2>
       <Row>
-        <Col md={explanations ? 6 : 12}>
-          <h3>{item.contentType === 'website' ? 'Website' : 'Search Snippet'}</h3>
+        <Col md={12}>
           <div className="border p-3 mb-3">
-            {item.content}
+            <ContentDisplay contentType={item.contentType} content={item.content} />
           </div>
           <Form>
-            {questions.map(renderQuestion)}
+            <ListGroup as="ol" numbered>
+            {questions.map(renderQuestion).map(addExplanation).map(q => <ListGroup.Item as='li'>{q}</ListGroup.Item>)}
+            </ListGroup>
             <Button onClick={onSubmit}>{submitButtonText}</Button>
           </Form>
         </Col>
-        {explanations && (
-          <Col md={6}>
-            <h3>Explanations</h3>
-            {questions.map(question => (
-              <div key={question.id} className="mb-3">
-                <h4>{question.text}</h4>
-                <p><strong>Correct Answer:</strong> {question.correctAnswer}</p>
-                <p><strong>Explanation:</strong> {question.explanation}</p>
-              </div>
-            ))}
-          </Col>
-        )}
       </Row>
     </Container>
   );

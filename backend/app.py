@@ -1,6 +1,7 @@
 import json
 from flask import Flask, request, jsonify, redirect, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.exc import IntegrityError
 from flask_cors import CORS
 from flask_migrate import Migrate
 import os
@@ -11,7 +12,7 @@ import string
 # Load environment variables
 load_dotenv()
 
-app = Flask(__name__, static_folder='../frontend/build', static_url_path='/')
+app = Flask(__name__, static_folder='../frontend/build', static_url_path='')
 CORS(app)
 
 # Configure the SQLite database
@@ -48,14 +49,36 @@ class Annotation(db.Model):
 @app.route('/api/initialize', methods=['POST'])
 def initialize_participant():
     data = request.json
-    participant = Participant(
-        id=data['pid'],
-        study_id=data['studyId'],
-        session_id=data['sessionId']
+    pid = data['pid']
+    study_id = data['studyId']
+    session_id = data['sessionId']
+
+    # Check if the participant already exists
+    existing_participant = Participant.query.get(pid)
+    if existing_participant:
+        # If participant exists, update their session ID and return current stage
+        existing_participant.session_id = session_id
+        db.session.commit()
+        return jsonify({"currentStage": existing_participant.current_stage})
+
+    # If participant doesn't exist, create a new one
+    new_participant = Participant(
+        id=pid,
+        study_id=study_id,
+        session_id=session_id
     )
-    db.session.add(participant)
-    db.session.commit()
-    return jsonify({"currentStage": participant.current_stage})
+
+    try:
+        db.session.add(new_participant)
+        db.session.commit()
+        return jsonify({"currentStage": new_participant.current_stage})
+    except IntegrityError:
+        # In case of a race condition where the participant was created between our check and insert
+        db.session.rollback()
+        existing_participant = Participant.query.get(pid)
+        existing_participant.session_id = session_id
+        db.session.commit()
+        return jsonify({"currentStage": existing_participant.current_stage})
 
 @app.route('/api/onboarding')
 def get_onboarding_tasks():
@@ -179,6 +202,10 @@ def serve(path):
         return send_from_directory(app.static_folder, path)
     else:
         return send_from_directory(app.static_folder, 'index.html')
+    
+@app.errorhandler(404)
+def not_found(e):
+    return send_from_directory(app.static_folder, 'index.html')
 
 if __name__ == '__main__':
     app.run(debug=True)

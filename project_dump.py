@@ -9,7 +9,7 @@ def dump_files(directory='.', output_file='project_dump.txt'):
                 dirs.remove('migrations')  # don't visit migrations directories
             
             for file in files:
-                if file.endswith(extensions) and ('project_dump' not in file) and ('build' not in root):
+                if file.endswith(extensions) and ('project_dump' not in file) and ('build' not in root) and ('db' not in file) and ('node_modules' not in root) and ('package-lock' not in file):
                     file_path = os.path.join(root, file)
                     outfile.write(f"File: {file_path}\n")
                     outfile.write("----------------------\n")

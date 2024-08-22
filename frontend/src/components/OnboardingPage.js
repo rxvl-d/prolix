@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import AnnotationLayout from './AnnotationLayout';
+import { Container, Alert } from 'react-bootstrap';
 
 function OnboardingPage({ participantId, onComplete }) {
   const [currentExample, setCurrentExample] = useState(0);
@@ -32,6 +33,12 @@ function OnboardingPage({ participantId, onComplete }) {
   const example = examples[currentExample];
 
   return (
+    <Container>
+      <Alert variant="success">
+        This is an example task. 
+        The expected answers and the explanations are on the right. 
+        These will not be present when you take the actual assessment.
+      </Alert>
     <AnnotationLayout
       title={`Onboarding: Example ${currentExample + 1} of ${examples.length}`}
       item={example}
@@ -40,8 +47,10 @@ function OnboardingPage({ participantId, onComplete }) {
       onAnswerChange={handleAnswerChange}
       onSubmit={handleNext}
       submitButtonText={currentExample < examples.length - 1 ? 'Next Example' : 'Start Assessment'}
-      explanations={true}
+      explanations={example.explanations}
+      correctAnswers={example.correctAnswers}
     />
+    </Container>
   );
 }
 
