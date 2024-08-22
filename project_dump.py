@@ -9,7 +9,7 @@ def dump_files(directory='.', output_file='project_dump.txt'):
                 dirs.remove('migrations')  # don't visit migrations directories
             
             for file in files:
-                if file.endswith(extensions):
+                if file.endswith(extensions) and ('project_dump' not in file) and ('build' not in root):
                     file_path = os.path.join(root, file)
                     outfile.write(f"File: {file_path}\n")
                     outfile.write("----------------------\n")
