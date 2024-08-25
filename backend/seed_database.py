@@ -1,4 +1,4 @@
-from app import app, db, Task
+from app import app, db, Task, Participant
 import json
 
 questions = [
@@ -53,6 +53,7 @@ def seed_database():
     with app.app_context():
         # Clear existing tasks
         Task.query.delete()
+        Participant.query.delete()
         # Onboarding tasks
         onboarding_tasks = [ 
             to_task_dict({

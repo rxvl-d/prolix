@@ -24,7 +24,8 @@ migrate = Migrate(app, db)
 
 # Define models
 class Participant(db.Model):
-    id = db.Column(db.String(50), primary_key=True)
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    participant_id = db.Column(db.String(50), nullable=False)
     study_id = db.Column(db.String(50), nullable=False)
     session_id = db.Column(db.String(50), nullable=False)
     completion_code = db.Column(db.String(20), nullable=True)
@@ -49,49 +50,46 @@ class Annotation(db.Model):
 @app.route('/api/initialize', methods=['POST'])
 def initialize_participant():
     data = request.json
-    pid = data['pid']
+    pid = data['participantId']
     study_id = data['studyId']
     session_id = data['sessionId']
 
     # Check if the participant already exists
-    existing_participant = Participant.query.get(pid)
+    existing_participant = Participant.query.filter_by(participant_id=pid, study_id=study_id, session_id=session_id).first()
     if existing_participant:
-        # If participant exists, update their session ID and return current stage
-        existing_participant.session_id = session_id
-        db.session.commit()
         return jsonify({"currentStage": existing_participant.current_stage})
-
-    # If participant doesn't exist, create a new one
-    new_participant = Participant(
-        id=pid,
-        study_id=study_id,
-        session_id=session_id
-    )
-
-    try:
+    else:
+        new_participant = Participant(participant_id=pid, study_id=study_id, session_id=session_id, current_stage='welcome')
         db.session.add(new_participant)
         db.session.commit()
         return jsonify({"currentStage": new_participant.current_stage})
-    except IntegrityError:
-        # In case of a race condition where the participant was created between our check and insert
-        db.session.rollback()
-        existing_participant = Participant.query.get(pid)
-        existing_participant.session_id = session_id
-        db.session.commit()
-        return jsonify({"currentStage": existing_participant.current_stage})
+
+@app.route('/api/update-stage', methods=['POST'])
+def update_stage():
+    data = request.json
+    pid = data['participantId']
+    study_id = data['studyId']
+    session_id = data['sessionId']
+    new_stage = data['newStage']
+
+    existing_participant = Participant.query.filter_by(participant_id=pid, study_id=study_id, session_id=session_id).first()
+    existing_participant.current_stage = new_stage
+    db.session.commit()
+    return jsonify({"currentStage": existing_participant.current_stage})
 
 @app.route('/api/onboarding')
 def get_onboarding_tasks():
-    participant_id = request.args.get('participantId')
     tasks = Task.query.filter_by(stage='onboarding').all()
-    return jsonify([{
+    tasks_json = [{
         'id': task.id,
         'contentType': task.content_type,
         'content': task.content,
         'questions': task.questions,
         'correctAnswers': task.correct_answers,
         'explanations': task.explanations
-    } for task in tasks])
+    } for task in tasks]
+    print(tasks_json)
+    return jsonify(tasks_json)
 
 @app.route('/api/assessment')
 def get_assessment_tasks():

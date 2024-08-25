@@ -1,5 +1,6 @@
 import React from 'react';
 import { Alert, Container, Row, Col, Form, Button, ListGroup } from 'react-bootstrap';
+import { Form } from 'react-router-dom';
 
 const QuestionTypes = {
   LIKERT: 'likert',
@@ -100,7 +101,8 @@ function AnnotationLayout({
   onSubmit, 
   submitButtonText,
   explanations ,
-  correctAnswers
+  correctAnswers,
+  stageEnd
 }) {
   const renderQuestion = (question) => {
     switch (question.type) {
@@ -166,11 +168,12 @@ function AnnotationLayout({
           <div className="border p-3 mb-3">
             <ContentDisplay contentType={item.contentType} content={item.content} />
           </div>
-          <Form>
+          <Form method="post">
+            {stageEnd && <input type="hidden" name="newStage" value={stageEnd} />}
             <ListGroup as="ol" numbered>
             {questions.map(renderQuestion).map(addExplanation).map(q => <ListGroup.Item as='li'>{q}</ListGroup.Item>)}
             </ListGroup>
-            <Button onClick={onSubmit}>{submitButtonText}</Button>
+            <Button type="submit">{submitButtonText}</Button>
           </Form>
         </Col>
       </Row>

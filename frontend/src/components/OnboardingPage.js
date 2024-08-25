@@ -2,18 +2,18 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import AnnotationLayout from './AnnotationLayout';
 import { Container, Alert } from 'react-bootstrap';
+import { useLoaderData } from 'react-router-dom';
 
-function OnboardingPage({ participantId, onComplete }) {
+async function loader() {
+  const onboardingData = await axios.get('/api/onboarding');
+  return onboardingData.data;
+}
+
+function OnboardingPage() {
+  const examples = useLoaderData();
+  const participantId = localStorage.getItem('PARTICIPANT_ID');
   const [currentExample, setCurrentExample] = useState(0);
-  const [examples, setExamples] = useState([]);
   const [answers, setAnswers] = useState({});
-
-  useEffect(() => {
-    // Fetch onboarding examples from the backend
-    axios.get(`/api/onboarding?participantId=${participantId}`)
-      .then(response => setExamples(response.data))
-      .catch(error => console.error('Error fetching onboarding examples:', error));
-  }, [participantId]);
 
   const handleAnswerChange = (questionId, answer) => {
     setAnswers(prev => ({ ...prev, [questionId]: answer }));
@@ -24,7 +24,7 @@ function OnboardingPage({ participantId, onComplete }) {
       setCurrentExample(prev => prev + 1);
       setAnswers({});
     } else {
-      onComplete();
+      // onComplete();
     }
   };
 
@@ -49,9 +49,10 @@ function OnboardingPage({ participantId, onComplete }) {
       submitButtonText={currentExample < examples.length - 1 ? 'Next Example' : 'Start Assessment'}
       explanations={example.explanations}
       correctAnswers={example.correctAnswers}
+      stageEnd={currentExample === examples.length - 1 ? 'assessment' : null}
     />
     </Container>
   );
 }
 
-export default OnboardingPage;
+export { loader, OnboardingPage };

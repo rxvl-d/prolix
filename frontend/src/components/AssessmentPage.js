@@ -3,7 +3,8 @@ import axios from 'axios';
 import { Alert, Button } from 'react-bootstrap';
 import AnnotationLayout from './AnnotationLayout';
 
-function AssessmentPage({ participantId, onComplete }) {
+function AssessmentPage() {
+  const participantId = localStorage.getItem('PROLIFIC_PID');
   const [currentItem, setCurrentItem] = useState(0);
   const [items, setItems] = useState([]);
   const [answers, setAnswers] = useState({});
@@ -38,7 +39,7 @@ function AssessmentPage({ participantId, onComplete }) {
   useEffect(() => {
     if (submitted && assessmentResult) {
       if (assessmentResult.passed) {
-        onComplete();
+        // onComplete();
       } else {
         // Redirect to Prolific screen-out URL
         axios.get(`/api/completion-code?participantId=${participantId}`)
@@ -48,7 +49,7 @@ function AssessmentPage({ participantId, onComplete }) {
           .catch(error => console.error('Error getting completion code:', error));
       }
     }
-  }, [submitted, assessmentResult, participantId, onComplete]);
+  }, [submitted, assessmentResult, participantId]);
 
   if (items.length === 0) return <div>Loading...</div>;
 

@@ -3,7 +3,8 @@ import axios from 'axios';
 import { ProgressBar } from 'react-bootstrap';
 import AnnotationLayout from './AnnotationLayout';
 
-function LiveAnnotationPage({ participantId, onComplete }) {
+function LiveAnnotationPage() {
+  const participantId = localStorage.getItem('PROLIFIC_PID');
   const [currentItem, setCurrentItem] = useState(0);
   const [items, setItems] = useState([]);
   const [answers, setAnswers] = useState({});
@@ -28,7 +29,7 @@ function LiveAnnotationPage({ participantId, onComplete }) {
           setAnswers({});
           setProgress((currentItem + 1) / items.length * 100);
         } else {
-          onComplete();
+          // onComplete();
         }
       })
       .catch(error => console.error('Error submitting annotation:', error));

@@ -2,10 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { Container, Alert } from 'react-bootstrap';
 import axios from 'axios';
 
-function ThankYouPage({ participantId }) {
+function ThankYouPage() {
   const [completionCode, setCompletionCode] = useState('');
   const [completionUrl, setCompletionUrl] = useState('');
-
+  const participantId = localStorage.getItem('PARTICIPANT_ID');
   useEffect(() => {
     axios.get(`/api/completion-code?participantId=${participantId}`)
       .then(response => {
